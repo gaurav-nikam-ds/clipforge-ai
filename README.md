@@ -1,65 +1,63 @@
 # ClipForge AI Studio
 
-An independent creator-first video captioning MVP. The current build focuses on a cleaner workspace, caption editing and subtitle export; it is not a full Captik clone.
+ClipForge now contains two application entry points:
 
-## Current workspace
-- **Home:** project overview and editing workflow
-- **Studio:** upload and preview a video; generate captions with faster-whisper or enter a transcript manually
-- **Caption tools:** edit caption text and timing; download SRT subtitles
-- **Export & settings:** choose subtitle appearance and render an MP4 with burned-in captions
-- Dark responsive layout with consistent navigation and project status
+- **Browser frontend:** `index.html`, `styles.css`, `app.js` — a redesigned multi-section creator workspace.
+- **Streamlit prototype:** `app.py` — the earlier Python captioning MVP with local faster-whisper transcription and FFmpeg subtitle burn-in.
 
-## Implemented features
-- Video upload and preview (MP4, MOV, WebM, M4V)
-- Local speech transcription using `faster-whisper`
-- Hindi, English, Marathi and other supported Whisper languages
-- Manual transcript entry with approximate timing
-- Editable caption text and segment timings
-- SRT subtitle download
-- ASS subtitle styling controls (font, size, colour, outline and placement)
-- MP4 rendering through FFmpeg, with no watermark added by the app
+The new browser frontend is the intended UI direction. It is a client-side foundation, not a claim of full feature parity with Captik.
 
-## Not implemented yet
-These are **not** available as working features in this version:
-- Timeline editor, clip splitting/trimming/reordering and keyframes
-- Word-by-word karaoke captions or a large animated template library
-- Automatic silence removal
-- AI B-roll generation, smart zoom and subject/background removal
-- Licensed sound library, cloud accounts, project autosave, team workspaces or billing
-- Adobe Premiere Pro / After Effects / DaVinci Resolve integrations
-- Actual canvas conversion/cropping for each aspect ratio (current export preserves source aspect ratio)
+## Browser frontend: features that work
+- Responsive, dark creator workspace with Home, Video Editor, Captions, Templates, AI Edit Planner, Sounds, Projects and Export pages
+- Video upload, drag-and-drop, local video preview and metadata
+- Manual caption entry with approximate timings
+- Edit caption text and segment start/end times
+- Import and export SRT subtitle files
+- Six original caption-style presets, colour/size/position controls and live caption preview
+- Aspect-ratio canvas selection for browser rendering (9:16, 16:9, 1:1 and 4:5)
+- Browser-based WebM recording with caption burn-in where MediaRecorder and video stream capture are supported
+- Local project snapshots in browser localStorage (caption text/settings only, not the video file)
+- Edit brief planner and sound-cue planning list
 
-A polished UI does not mean an advanced feature is implemented. These modules need separate engineering and testing.
+## Known limitations — not implemented as production features
+- Automatic transcription of uploaded files is **not connected** in the new browser frontend.
+- AI translation, Hinglish normalization and word-level timestamps are not implemented in that frontend.
+- AI edit planner creates a written draft; it does not automatically make cuts, zooms or B-roll.
+- The sound page is a cue-planning list; no licensed audio files are bundled.
+- Silence detection/removal, subject cut-outs, camera tracking, AI B-roll generation, clip split/reorder, keyframes, animated karaoke word tracking and a 100+ template library are not implemented in the browser frontend.
+- Browser export is WebM, not MP4. Browser/device support and performance vary; long videos can use substantial memory. The selected aspect ratio is applied to the render canvas using a cover crop.
+- The browser snapshot saves project metadata, not media bytes. Re-import the video before rendering after a page reload.
+- No accounts, cloud project storage, billing, team workspaces, background job queue or editor integrations are provided.
 
-## Resource and hosting limits
-A genuinely unlimited public AI video service is not free to operate: CPU/GPU time, storage, bandwidth and hosting have costs. Processing currently runs on the machine hosting the app. On Streamlit Community Cloud, large videos, model downloads or long renders may hit resource limits. For personal use, running locally with FFmpeg avoids some hosted limits, but remains limited by your computer's CPU and RAM.
+The Streamlit prototype remains available through `app.py` and retains its own processing path, but it does not automatically share project state with the browser frontend.
 
-## Run locally (Windows)
-1. Install Python 3.10 or 3.11.
-2. Install FFmpeg and ensure `ffmpeg` and `ffprobe` are on PATH.
-3. Open a terminal in the project folder.
-4. Create and activate a virtual environment:
+## Deploy the new frontend on Vercel
+1. Open Vercel and create a **new project** from this GitHub repository.
+2. Use the repository root as the **Root Directory**.
+3. Choose the static/no-framework deployment (no build command is required; the entry page is `index.html`).
+4. Deploy. Vercel serves the browser frontend from `index.html`.
+5. Keep in mind: your existing Streamlit deployment will continue to run `app.py`. It will not turn into this frontend automatically.
+
+The repository root contains Python and Streamlit files for the old deployment, so if Vercel's framework detection selects Python unexpectedly, choose the static/no-framework option and leave the root directory as `.`.
+
+## Run the Streamlit prototype locally
+1. Install Python 3.10 or 3.11 and FFmpeg (`ffmpeg` and `ffprobe` on PATH).
+2. Run:
    ```powershell
    py -3.11 -m venv .venv
-   .venv\\Scripts\\activate
+   .venv\Scripts\activate
    python -m pip install --upgrade pip
    pip install -r requirements.txt
    streamlit run app.py
    ```
-5. Open the local URL printed by Streamlit.
 
-The first AI transcription may download model files. The `tiny` model is selected by default to reduce CPU/RAM load.
+The first faster-whisper transcription downloads model files. The `tiny` model is selected by default to reduce CPU/RAM usage.
 
-## Deploy on Streamlit Community Cloud
-1. Sign in at https://share.streamlit.io/ with GitHub.
-2. Select this repository, branch `main`, and main file `app.py`.
-3. Deploy or reboot the existing app to pull the latest commit.
-4. Check the app logs if the build fails.
-
-`packages.txt` requests FFmpeg in the build environment. If subtitle rendering fails, the host's FFmpeg build may lack `libass` support.
+## Production requirements still needed
+Before turning this into a public AI editing SaaS, connect a transcription/render backend, add secure authentication, upload limits, private media storage with retention rules, a background render queue, real progress reporting, automated tests and operational monitoring. AI/GPU processing, storage and bandwidth have ongoing costs, so unlimited public usage cannot be promised without infrastructure and a usage policy.
 
 ## Privacy
-Videos are written to temporary files during a session. Before inviting real users, add explicit retention rules, upload size limits, authentication, rate limiting, durable storage controls and a background job queue. Do not upload confidential footage to a public deployment.
+The new browser frontend does not upload media to a ClipForge backend. Browser-local project snapshots are not encrypted or permanent. The Streamlit prototype writes temporary files on its hosting machine; avoid uploading confidential footage to public deployments.
 
 ## Licence
-Choose a licence after checking the terms of every dependency and any media assets you add. No third-party sound pack or proprietary template library is bundled here.
+Check dependency licences and any media assets before choosing a project licence. No proprietary Captik assets or licensed sound library are included.
