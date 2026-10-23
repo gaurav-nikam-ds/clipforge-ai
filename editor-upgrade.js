@@ -124,4 +124,33 @@
     del?.click();
     notify("Merged caption into previous line");
   });
+  // Export trim points are persisted as UI values and consumed by app.js during recording.
+  const trimStart = $("#cfTrimStart"), trimEnd = $("#cfTrimEnd"), trimSummary = $("#cfTrimSummary");
+  const updateTrimSummary = () => {
+    if (!trimStart || !trimEnd || !trimSummary) return;
+    const a = Math.max(0, Number(trimStart.value) || 0);
+    const b = Number(trimEnd.value) > 0 ? Number(trimEnd.value) : (Number.isFinite(video.duration) ? video.duration : 0);
+    trimSummary.textContent = b > a ? ("Export range: " + a.toFixed(1) + "s – " + b.toFixed(1) + "s (" + (b-a).toFixed(1) + " seconds)") : "End must be after start.";
+  };
+  video.addEventListener("loadedmetadata", () => {
+    if (trimEnd && Number(trimEnd.value) <= 0) trimEnd.value = (video.duration || 0).toFixed(2);
+    updateTrimSummary();
+  });
+  [trimStart, trimEnd].forEach(el => el?.addEventListener("input", updateTrimSummary));
+  $("#cfSetTrimStart")?.addEventListener("click", () => {
+    if (!video.src) return notify("Import a video first");
+    trimStart.value = (video.currentTime || 0).toFixed(2);
+    updateTrimSummary(); notify("Trim start set to playhead");
+  });
+  $("#cfSetTrimEnd")?.addEventListener("click", () => {
+    if (!video.src) return notify("Import a video first");
+    trimEnd.value = (video.currentTime || 0).toFixed(2);
+    updateTrimSummary(); notify("Trim end set to playhead");
+  });
+  $("#cfResetTrim")?.addEventListener("click", () => {
+    trimStart.value = "0";
+    trimEnd.value = Number.isFinite(video.duration) ? video.duration.toFixed(2) : "";
+    updateTrimSummary(); notify("Full video range restored");
+  });
+
 })();
