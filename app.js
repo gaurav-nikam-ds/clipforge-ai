@@ -108,7 +108,7 @@ async function renderVideo(){
   const drawFrame=()=>{
     c.fillStyle="#07070a";c.fillRect(0,0,w,h);
     const vw=video.videoWidth||w,vh=video.videoHeight||h,scale=Math.max(w/vw,h/vh),dw=vw*scale,dh=vh*scale;
-    c.save();c.beginPath();c.rect(0,0,w,h);c.clip();c.drawImage(video,(w-dw)/2,(h-dh)/2,dw,dh);c.restore();
+    c.save();c.beginPath();c.rect(0,0,w,h);c.clip();const vf=window.__cfVideoFilters||{brightness:100,contrast:100,saturation:100};c.filter="brightness("+vf.brightness+"%) contrast("+vf.contrast+"%) saturate("+vf.saturation+"%)";c.drawImage(video,(w-dw)/2,(h-dh)/2,dw,dh);c.filter="none";c.restore();
     if($("#includeCaptions").checked){const cap=S.captions.find(x=>video.currentTime>=x.start&&video.currentTime<=x.end);if(cap){if($("#wordKaraoke")?.checked)paintKaraokeCaption(c,w,h,cap,S.size*w/600,S.position);else paintCaption(c,w,h,cap.text,S.style,S.position,S.size*w/600,S.color)}}
   };
   try{
