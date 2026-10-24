@@ -22,9 +22,9 @@
       <button type="button" id="cfSplit">Split caption at playhead</button>
       <button type="button" id="cfDuplicate">Duplicate caption</button>
       <button type="button" id="cfMerge">Merge with previous</button>
-      <button type="button" id="cfJump">Go to time</button>
+      <button type="button" id="cfJump">Go to time</button><button type="button" id="cfTranscribe">Transcribe locally (AI)</button>
     </div>
-    <p class="cf-tools-note">Caption split/merge edits are applied to the current caption track. Speed changes the preview and is used during browser recording export. This is not a full multi-clip video timeline yet.</p>`;
+    <p id="cfTranscribeStatus" class="cf-tools-note">Local AI transcription downloads an open-source model to your browser on first use. It can be slow and needs sufficient RAM.</p><p class="cf-tools-note">Caption split/merge edits are applied to the current caption track. Speed changes the preview and is used during browser recording export. This is not a full multi-clip video timeline yet.</p>`;
   const mediaPanel = $(".media-panel");
   if (mediaPanel) mediaPanel.appendChild(panel);
 
@@ -62,6 +62,55 @@
     notify("Playback speed set to " + e.target.value + "×");
   });
   video.addEventListener("timeupdate", () => { $("#cfSeek").value = (video.currentTime || 0).toFixed(2); });
+
+
+  let localTranscriber = null;
+  $("#cfTranscribe")?.addEventListener("click", async () => {
+    const button=$("#cfTranscribe"),status=$("#cfTranscribeStatus"),file=window.__cfSourceFile;
+    if(!file)return notify("Import a video before transcription");
+    if(!$("#manualTranscript")){notify("Open the Captions page once and try again");return}
+    button.disabled=true;status.textContent="Preparing audio for local transcription…";
+    let audioCtx;
+    try{
+      const Ctx=window.AudioContext||window.webkitAudioContext;
+      if(!Ctx)throw new Error("Web Audio is not supported in this browser.");
+      audioCtx=new Ctx();
+      const decoded=await audioCtx.decodeAudioData((await file.arrayBuffer()).slice(0));
+      const targetRate=16000,outputLength=Math.ceil(decoded.duration*targetRate),mono=new Float32Array(outputLength);
+      for(let ch=0;ch<decoded.numberOfChannels;ch++){
+        const source=decoded.getChannelData(ch),ratio=decoded.sampleRate/targetRate;
+        for(let i=0;i<outputLength;i++){
+          const pos=i*ratio,left=Math.floor(pos),right=Math.min(source.length-1,left+1),fraction=pos-left;
+          mono[i]+=((source[left]||0)*(1-fraction)+(source[right]||0)*fraction)/decoded.numberOfChannels;
+        }
+      }
+      status.textContent="Loading Whisper model. First use may download over 100 MB; keep this tab open.";
+      if(!localTranscriber){
+        const mod=await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+        localTranscriber=await mod.pipeline("automatic-speech-recognition","Xenova/whisper-tiny",{progress_callback:p=>{
+          if(p&&p.status)status.textContent="Loading local AI model: "+p.status+(p.file?" · "+p.file:"");
+        }});
+      }
+      status.textContent="Transcribing locally. Longer videos may take several minutes…";
+      const result=await localTranscriber(mono,{sampling_rate:targetRate,return_timestamps:true,chunk_length_s:30,stride_length_s:5});
+      const chunks=Array.isArray(result.chunks)?result.chunks.filter(x=>x.text&&x.text.trim()):[];
+      const toStamp=n=>{n=Math.max(0,Number(n)||0);const ms=Math.round(n*1000),h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000),z=ms%1000;return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+","+String(z).padStart(3,"0")};
+      let srtText="";
+      if(chunks.length){
+        srtText=chunks.map((x,i)=>{const t=x.timestamp||[0,decoded.duration],a=Number.isFinite(t[0])?t[0]:0,b=Number.isFinite(t[1])?t[1]:Math.min(decoded.duration,a+3);return (i+1)+"\n"+toStamp(a)+" --> "+toStamp(Math.max(a+.1,b))+"\n"+x.text.trim()}).join("\n\n");
+      }else{
+        const text=String(result.text||"").trim();
+        if(!text)throw new Error("No speech was detected. Try a clearer clip or a different language.");
+        srtText="1\n"+toStamp(0)+" --> "+toStamp(decoded.duration)+"\n"+text;
+      }
+      const srtFile=new File([srtText],"clipforge-transcript.srt",{type:"application/x-subrip"});
+      const input=$("#srtFile"),dt=new DataTransfer();dt.items.add(srtFile);input.files=dt.files;input.dispatchEvent(new Event("change",{bubbles:true}));
+      status.textContent="Transcription complete · "+(chunks.length||1)+" timed segment(s). Review and correct names, punctuation and timings before export.";
+      notify("Local AI transcript created");
+    }catch(err){
+      status.textContent="Transcription failed: "+(err&&err.message?err.message:"model or audio error")+". Try Chrome/Edge, a shorter video, or use the manual/SRT workflow.";
+    }finally{if(audioCtx)await audioCtx.close().catch(()=>{});button.disabled=false;}
+  });
 
   $("#cfJump").addEventListener("click", () => {
     const t = Math.max(0, Number($("#cfSeek").value) || 0);
