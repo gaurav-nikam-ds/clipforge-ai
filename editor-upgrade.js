@@ -80,15 +80,30 @@
     const Ctx=window.AudioContext||window.webkitAudioContext;
     if(!Ctx) return null;
     const ac=new Ctx(),dest=ac.createMediaStreamDestination();
-    const videoSource=ac.createMediaElementSource(video),videoGain=ac.createGain();
-    videoGain.gain.value=1;videoSource.connect(videoGain);videoGain.connect(dest);videoGain.connect(ac.destination);
+    const audioVideo=document.createElement("video");
+    audioVideo.preload="auto";audioVideo.src=video.currentSrc||video.src;audioVideo.playsInline=true;audioVideo.style.display="none";document.body.appendChild(audioVideo);
+    const videoSource=ac.createMediaElementSource(audioVideo),videoGain=ac.createGain();
+    videoGain.gain.value=1;videoSource.connect(videoGain);videoGain.connect(dest);
     let musicSource=null,musicGain=null,mixMusicElement=null;
     if(musicUrl&&musicFile){
       mixMusicElement=document.createElement("audio");mixMusicElement.preload="auto";mixMusicElement.src=musicUrl;mixMusicElement.loop=true;mixMusicElement.style.display="none";document.body.appendChild(mixMusicElement);
       musicSource=ac.createMediaElementSource(mixMusicElement);musicGain=ac.createGain();musicGain.gain.value=musicVolume;
-      musicSource.connect(musicGain);musicGain.connect(dest);await ac.resume();await mixMusicElement.play();
-    }else await ac.resume();
-    return {stream:dest.stream,cleanup:async()=>{try{mixMusicElement?.pause();mixMusicElement?.remove();}catch{}try{await ac.close();}catch{}}};
+      musicSource.connect(musicGain);musicGain.connect(dest);
+    }
+    await ac.resume();
+    return {
+      stream:dest.stream,
+      syncTo:async t=>{
+        if(Math.abs(audioVideo.currentTime-t)>.05)await new Promise((resolve,reject)=>{
+          const done=()=>{audioVideo.removeEventListener("seeked",done);audioVideo.removeEventListener("error",fail);resolve()};
+          const fail=()=>{audioVideo.removeEventListener("seeked",done);audioVideo.removeEventListener("error",fail);reject(new Error("Audio sync seek failed"))};
+          audioVideo.addEventListener("seeked",done,{once:true});audioVideo.addEventListener("error",fail,{once:true});audioVideo.currentTime=t;
+        });
+      },
+      play:async()=>{await audioVideo.play();if(mixMusicElement&&mixMusicElement.paused)await mixMusicElement.play()},
+      pause:()=>{audioVideo.pause()},
+      cleanup:async()=>{try{audioVideo.pause();audioVideo.remove();mixMusicElement?.pause();mixMusicElement?.remove()}catch{}try{await ac.close()}catch{}}
+    };
   };
 
   let localTranscriber = null;
