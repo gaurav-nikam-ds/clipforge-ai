@@ -124,6 +124,88 @@
     del?.click();
     notify("Merged caption into previous line");
   });
+
+  // Multi-track timeline: seek the source video and reposition timed caption clips by dragging.
+  const oldTimeline = $(".timeline-panel");
+  const multi = document.createElement("div");
+  multi.className = "cf-multitrack";
+  multi.innerHTML = `
+    <div class="cf-mt-head"><div><strong>Timeline · multi-track view</strong><small>Drag caption blocks to retime · click a block to seek</small></div><span id="cfMtDuration">00:00</span></div>
+    <div class="cf-mt-scroll"><div class="cf-mt-ruler" id="cfMtRuler"></div>
+      <div class="cf-mt-lane"><div class="cf-mt-label">VIDEO</div><div class="cf-mt-track" id="cfMtVideo"><div class="cf-mt-video-clip">Source video · full clip</div></div></div>
+      <div class="cf-mt-lane"><div class="cf-mt-label">CAPTIONS</div><div class="cf-mt-track" id="cfMtCaptions"></div></div>
+    </div>
+    <p class="cf-mt-status" id="cfMtStatus">Import a video to create a timeline.</p>`;
+  if (oldTimeline) oldTimeline.appendChild(multi);
+  const mtStyle = document.createElement("style");
+  mtStyle.textContent = `
+    .cf-multitrack{margin-top:16px;padding:14px;border:1px solid #30303e;border-radius:12px;background:#101117;color:#f0eef7}
+    .cf-mt-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
+    .cf-mt-head strong{display:block;font-size:12px}.cf-mt-head small,.cf-mt-status{display:block;color:#9998ac;font-size:10px;line-height:1.6;margin-top:5px}
+    .cf-mt-head>span{font-size:11px;color:#c4b4ff;white-space:nowrap}
+    .cf-mt-scroll{overflow-x:auto;padding-bottom:4px}.cf-mt-ruler,.cf-mt-lane{min-width:600px;width:100%;display:grid;grid-template-columns:72px minmax(520px,1fr);gap:8px}
+    .cf-mt-ruler{height:24px;position:relative;margin-bottom:5px}.cf-mt-tick{position:absolute;top:0;font-size:9px;color:#85859a;transform:translateX(-50%)}
+    .cf-mt-lane{margin:7px 0;align-items:stretch}.cf-mt-label{font-size:9px;letter-spacing:.08em;color:#a5a3b7;display:flex;align-items:center}
+    .cf-mt-track{height:42px;position:relative;border:1px solid #30303b;border-radius:7px;background:repeating-linear-gradient(90deg,#171821 0,#171821 calc(10% - 1px),#292936 calc(10% - 1px),#292936 10%);overflow:visible}
+    .cf-mt-video-clip{position:absolute;inset:4px 0;background:linear-gradient(90deg,#393052,#4a3b6b);border:1px solid #7d68ac;border-radius:5px;padding:7px 10px;font-size:10px;color:#e9ddff;overflow:hidden;white-space:nowrap}
+    .cf-mt-caption{position:absolute;top:5px;height:30px;min-width:12px;border:1px solid #9b83e8;border-radius:5px;background:#65509a;color:white;font-size:9px;padding:0 5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:grab;touch-action:none;user-select:none}
+    .cf-mt-caption.selected{outline:2px solid #d5c5ff;z-index:2}.cf-mt-caption:active{cursor:grabbing}
+    .cf-mt-playhead{position:absolute;top:-1px;bottom:-1px;width:2px;background:#ff9b78;z-index:5;pointer-events:none}
+    .cf-mt-status{margin-bottom:0}
+  `;
+  document.head.appendChild(mtStyle);
+  const fmtMt = (n) => { n=Math.max(0,Number(n)||0); return String(Math.floor(n/60)).padStart(2,"0")+":"+String(Math.floor(n%60)).padStart(2,"0"); };
+  const mtDuration = () => Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+  function renderMultiTrack() {
+    const duration = mtDuration(), ruler=$("#cfMtRuler"), videoTrack=$("#cfMtVideo"), capTrack=$("#cfMtCaptions");
+    if (!ruler || !videoTrack || !capTrack) return;
+    $("#cfMtDuration").textContent=fmtMt(duration);
+    ruler.innerHTML="";
+    const ticks=Math.max(1,Math.ceil(duration/5));
+    for(let i=0;i<=ticks;i++){
+      const sec=Math.min(duration,i*5),tick=document.createElement("span");
+      tick.className="cf-mt-tick";tick.style.left=(duration?sec/duration*100:0)+"%";tick.textContent=fmtMt(sec);ruler.appendChild(tick);
+    }
+    const oldClip=videoTrack.querySelector(".cf-mt-video-clip");
+    if(oldClip){oldClip.style.left="0";oldClip.style.width="100%";oldClip.textContent=video.src?(video.currentSrc.split("/").pop().split("?")[0]||"Source video · full clip"):"No video loaded";}
+    videoTrack.querySelectorAll(".cf-mt-playhead").forEach(e=>e.remove());
+    capTrack.innerHTML="";
+    const items=[...document.querySelectorAll(".caption-item")];
+    items.forEach((item,i)=>{
+      const text=item.querySelector("[data-text]"),start=item.querySelector("[data-start]"),end=item.querySelector("[data-end]");
+      if(!text||!start||!end)return;
+      const a=Math.max(0,Number(start.value)||0),b=Math.max(a+.1,Number(end.value)||a+.1),block=document.createElement("button");
+      block.type="button";block.className="cf-mt-caption"+(item.classList.contains("selected")?" selected":"");
+      block.textContent=text.value||("Caption "+(i+1));block.title=(text.value||"Caption")+" · "+a.toFixed(2)+"–"+b.toFixed(2)+"s";
+      block.style.left=(duration?Math.min(100,a/duration*100):0)+"%";
+      block.style.width=(duration?Math.max(1,(b-a)/duration*100):8)+"%";
+      block.addEventListener("click",()=>{video.currentTime=Math.min(a,duration||a);item.click();renderMultiTrack();});
+      block.addEventListener("pointerdown",e=>{
+        if(!duration)return;
+        e.preventDefault();e.stopPropagation();
+        const track=capTrack.getBoundingClientRect(),originX=e.clientX,originA=Number(start.value)||0,originB=Number(end.value)||originA+.1;
+        block.setPointerCapture?.(e.pointerId);
+        const move=ev=>{const delta=(ev.clientX-originX)/track.width*duration;const na=Math.max(0,Math.min(duration-(originB-originA),originA+delta));block.style.left=(na/duration*100)+"%";block.dataset.pendingStart=String(na);};
+        const up=ev=>{
+          block.removeEventListener("pointermove",move);block.removeEventListener("pointerup",up);block.removeEventListener("pointercancel",up);
+          const na=Number(block.dataset.pendingStart);
+          if(Number.isFinite(na)){start.value=na.toFixed(2);end.value=Math.min(duration,na+(originB-originA)).toFixed(2);fire(start,"change");fire(end,"change");video.currentTime=na;renderMultiTrack();}
+        };
+        block.addEventListener("pointermove",move);block.addEventListener("pointerup",up);block.addEventListener("pointercancel",up);
+      });
+      capTrack.appendChild(block);
+    });
+    const pct=duration?Math.min(100,video.currentTime/duration*100):0;
+    [videoTrack,capTrack].forEach(track=>{const line=document.createElement("div");line.className="cf-mt-playhead";line.style.left=pct+"%";track.appendChild(line);});
+    $("#cfMtStatus").textContent=duration?("Playhead "+video.currentTime.toFixed(2)+"s · "+items.length+" caption clip(s). Drag blocks horizontally to retime them. Video source is one clip in this build."): "Import a video to create a timeline.";
+  }
+  video.addEventListener("loadedmetadata",renderMultiTrack);
+  video.addEventListener("timeupdate",()=>{const duration=mtDuration();if(!duration)return;const pct=Math.min(100,video.currentTime/duration*100);document.querySelectorAll(".cf-mt-playhead").forEach(line=>line.style.left=pct+"%");$("#cfMtStatus").textContent="Playhead "+video.currentTime.toFixed(2)+"s · drag caption blocks to retime.";});
+  const mtObserver=new MutationObserver(()=>renderMultiTrack());
+  const capList=$("#captionList");if(capList)mtObserver.observe(capList,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class"]});
+  window.addEventListener("resize",renderMultiTrack);
+  setTimeout(renderMultiTrack,250);
+
   // Export trim points are persisted as UI values and consumed by app.js during recording.
   const trimStart = $("#cfTrimStart"), trimEnd = $("#cfTrimEnd"), trimSummary = $("#cfTrimSummary");
   const updateTrimSummary = () => {
