@@ -130,7 +130,7 @@
   const multi = document.createElement("div");
   multi.className = "cf-multitrack";
   multi.innerHTML = `
-    <div class="cf-mt-head"><div><strong>Timeline · multi-track view</strong><small>Drag caption blocks to retime · click a block to seek</small></div><span id="cfMtDuration">00:00</span></div>
+    <div class="cf-mt-head"><div><strong>Timeline · multi-track view</strong><small>Split, remove, reorder source clips · drag captions to retime</small></div><span id="cfMtDuration">00:00</span></div><div class="cf-clip-actions"><button type="button" id="cfSplitVideo">Split video at playhead</button><button type="button" id="cfRemoveVideo">Remove selected clip</button><button type="button" id="cfMoveClipLeft">Move clip left</button><button type="button" id="cfMoveClipRight">Move clip right</button><button type="button" id="cfResetClips">Reset video edits</button></div><div class="cf-clip-sequence" id="cfClipSequence"></div>
     <div class="cf-mt-scroll"><div class="cf-mt-ruler" id="cfMtRuler"></div>
       <div class="cf-mt-lane"><div class="cf-mt-label">VIDEO</div><div class="cf-mt-track" id="cfMtVideo"><div class="cf-mt-video-clip">Source video · full clip</div></div></div>
       <div class="cf-mt-lane"><div class="cf-mt-label">CAPTIONS</div><div class="cf-mt-track" id="cfMtCaptions"></div></div>
@@ -151,12 +151,65 @@
     .cf-mt-caption{position:absolute;top:5px;height:30px;min-width:12px;border:1px solid #9b83e8;border-radius:5px;background:#65509a;color:white;font-size:9px;padding:0 5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:grab;touch-action:none;user-select:none}
     .cf-mt-caption.selected{outline:2px solid #d5c5ff;z-index:2}.cf-mt-caption:active{cursor:grabbing}
     .cf-mt-playhead{position:absolute;top:-1px;bottom:-1px;width:2px;background:#ff9b78;z-index:5;pointer-events:none}
-    .cf-mt-status{margin-bottom:0}
+    .cf-mt-status{margin-bottom:0}.cf-clip-actions{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.cf-clip-actions button{background:#22202e;border:1px solid #4a405f;border-radius:7px;padding:7px 9px;color:#ded3ff;font-size:10px;cursor:pointer}.cf-clip-sequence{display:flex;gap:7px;overflow-x:auto;padding:4px 0 8px}.cf-seq-clip{flex:0 0 150px;min-width:120px;text-align:left;padding:9px;background:#252137;border:1px solid #5c4b7c;border-radius:8px;color:#f2eaff;cursor:pointer}.cf-seq-clip.selected{outline:2px solid #c2aaff}.cf-seq-clip small{display:block;color:#b0a6c8;font-size:9px;margin-top:5px}
   `;
   document.head.appendChild(mtStyle);
   const fmtMt = (n) => { n=Math.max(0,Number(n)||0); return String(Math.floor(n/60)).padStart(2,"0")+":"+String(Math.floor(n%60)).padStart(2,"0"); };
   const mtDuration = () => Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+
+  // Non-destructive source clip sequence. Each item references a range in the original file.
+  let clipSequence = [];
+  let selectedClip = 0;
+  let clipSequenceDuration = 0;
+  const cloneSequence = () => clipSequence.map(x=>({start:x.start,end:x.end}));
+  window.__cfGetClipSequence = () => cloneSequence();
+  window.__cfResetClipSequence = () => { clipSequence=[];selectedClip=0;clipSequenceDuration=0;renderMultiTrack(); };
+  function ensureClipSequence() {
+    const d=mtDuration();
+    if(d>0 && (!clipSequence.length || Math.abs(clipSequenceDuration-d)>.05)){
+      clipSequence=[{start:0,end:d}];selectedClip=0;clipSequenceDuration=d;
+    }
+  }
+  function renderClipSequence() {
+    const host=$("#cfClipSequence");if(!host)return;ensureClipSequence();host.innerHTML="";
+    if(!clipSequence.length){host.textContent="Import a video to create editable clips.";return;}
+    clipSequence.forEach((clip,i)=>{
+      const b=document.createElement("button");b.type="button";b.className="cf-seq-clip"+(i===selectedClip?" selected":"");
+      b.innerHTML="<strong>Clip "+(i+1)+"</strong><small>"+fmtMt(clip.start)+" – "+fmtMt(clip.end)+" · "+(clip.end-clip.start).toFixed(1)+"s</small>";
+      b.addEventListener("click",()=>{selectedClip=i;video.currentTime=clip.start;renderMultiTrack();});host.appendChild(b);
+    });
+    const track=$("#cfMtVideo");if(track){
+      track.querySelectorAll(".cf-mt-source-segment").forEach(e=>e.remove());
+      const base=track.querySelector(".cf-mt-video-clip");if(base)base.style.display="none";
+      const d=mtDuration();
+      clipSequence.forEach((clip,i)=>{
+        const b=document.createElement("button");b.type="button";b.className="cf-mt-source-segment"+(i===selectedClip?" selected":"");
+        b.textContent="Clip "+(i+1);b.title=clip.start.toFixed(2)+"–"+clip.end.toFixed(2)+" seconds";
+        b.style.cssText="position:absolute;top:4px;bottom:4px;left:"+(d?clip.start/d*100:0)+"%;width:"+(d?(clip.end-clip.start)/d*100:100)+"%;min-width:18px;overflow:hidden;white-space:nowrap;background:"+(i===selectedClip?"#7659b5":"#43345f")+";border:1px solid #9c83dc;border-radius:5px;color:#fff;font-size:9px;cursor:pointer";
+        b.addEventListener("click",e=>{e.stopPropagation();selectedClip=i;video.currentTime=clip.start;renderMultiTrack();});track.appendChild(b);
+      });
+    }
+  }
+  $("#cfSplitVideo")?.addEventListener("click",()=>{
+    ensureClipSequence();const clip=clipSequence[selectedClip],t=video.currentTime;
+    if(!clip||t<=clip.start+.12||t>=clip.end-.12){$("#cfMtStatus").textContent="Move the playhead inside the selected clip before splitting.";return;}
+    const second={start:t,end:clip.end};clip.end=t;clipSequence.splice(selectedClip+1,0,second);selectedClip++;
+    renderMultiTrack();$("#cfMtStatus").textContent="Source clip split at "+t.toFixed(2)+"s. Both clips remain editable.";
+  });
+  $("#cfRemoveVideo")?.addEventListener("click",()=>{
+    if(!clipSequence.length)return;clipSequence.splice(selectedClip,1);selectedClip=Math.max(0,Math.min(selectedClip,clipSequence.length-1));renderMultiTrack();
+    $("#cfMtStatus").textContent=clipSequence.length?"Clip removed from the export sequence.":"All video clips removed; reset edits to restore the source.";
+  });
+  $("#cfMoveClipLeft")?.addEventListener("click",()=>{
+    if(selectedClip<=0)return;[clipSequence[selectedClip-1],clipSequence[selectedClip]]=[clipSequence[selectedClip],clipSequence[selectedClip-1]];selectedClip--;renderMultiTrack();
+  });
+  $("#cfMoveClipRight")?.addEventListener("click",()=>{
+    if(selectedClip<0||selectedClip>=clipSequence.length-1)return;[clipSequence[selectedClip+1],clipSequence[selectedClip]]=[clipSequence[selectedClip],clipSequence[selectedClip+1]];selectedClip++;renderMultiTrack();
+  });
+  $("#cfResetClips")?.addEventListener("click",()=>{clipSequence=[];selectedClip=0;ensureClipSequence();renderMultiTrack();$("#cfMtStatus").textContent="Source video restored as one full-length clip.";});
+
   function renderMultiTrack() {
+    ensureClipSequence();
     const duration = mtDuration(), ruler=$("#cfMtRuler"), videoTrack=$("#cfMtVideo"), capTrack=$("#cfMtCaptions");
     if (!ruler || !videoTrack || !capTrack) return;
     $("#cfMtDuration").textContent=fmtMt(duration);
@@ -195,6 +248,7 @@
       });
       capTrack.appendChild(block);
     });
+    renderClipSequence();
     const pct=duration?Math.min(100,video.currentTime/duration*100):0;
     [videoTrack,capTrack].forEach(track=>{const line=document.createElement("div");line.className="cf-mt-playhead";line.style.left=pct+"%";track.appendChild(line);});
     $("#cfMtStatus").textContent=duration?("Playhead "+video.currentTime.toFixed(2)+"s · "+items.length+" caption clip(s). Drag blocks horizontally to retime them. Video source is one clip in this build."): "Import a video to create a timeline.";
