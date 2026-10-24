@@ -91,6 +91,7 @@
       musicSource.connect(musicGain);musicGain.connect(dest);
     }
     await ac.resume();
+    if(audioVideo.readyState<1)await new Promise((resolve,reject)=>{audioVideo.addEventListener("loadedmetadata",resolve,{once:true});audioVideo.addEventListener("error",()=>reject(new Error("Could not load source audio")), {once:true});});
     return {
       stream:dest.stream,
       syncTo:async t=>{
