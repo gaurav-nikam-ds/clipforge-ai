@@ -82,12 +82,13 @@
     const ac=new Ctx(),dest=ac.createMediaStreamDestination();
     const videoSource=ac.createMediaElementSource(video),videoGain=ac.createGain();
     videoGain.gain.value=1;videoSource.connect(videoGain);videoGain.connect(dest);videoGain.connect(ac.destination);
-    let musicSource=null,musicGain=null;
-    if(musicElement&&musicFile){
-      musicElement.currentTime=0;musicSource=ac.createMediaElementSource(musicElement);musicGain=ac.createGain();musicGain.gain.value=musicVolume;
-      musicSource.connect(musicGain);musicGain.connect(dest);musicElement.loop=true;await ac.resume();await musicElement.play();
+    let musicSource=null,musicGain=null,mixMusicElement=null;
+    if(musicUrl&&musicFile){
+      mixMusicElement=document.createElement("audio");mixMusicElement.preload="auto";mixMusicElement.src=musicUrl;mixMusicElement.loop=true;mixMusicElement.style.display="none";document.body.appendChild(mixMusicElement);
+      musicSource=ac.createMediaElementSource(mixMusicElement);musicGain=ac.createGain();musicGain.gain.value=musicVolume;
+      musicSource.connect(musicGain);musicGain.connect(dest);await ac.resume();await mixMusicElement.play();
     }else await ac.resume();
-    return {stream:dest.stream,cleanup:async()=>{try{musicElement?.pause();}catch{}try{await ac.close();}catch{}}};
+    return {stream:dest.stream,cleanup:async()=>{try{mixMusicElement?.pause();mixMusicElement?.remove();}catch{}try{await ac.close();}catch{}}};
   };
 
   let localTranscriber = null;
