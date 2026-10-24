@@ -2,6 +2,7 @@
   "use strict";
   const $ = (s) => document.querySelector(s);
   const video = $("#sourceVideo");
+  window.__cfSourceFile = null;
   if (!video) return;
 
   // Adds real, client-side editing controls to the existing ClipForge editor.
@@ -130,7 +131,7 @@
   const multi = document.createElement("div");
   multi.className = "cf-multitrack";
   multi.innerHTML = `
-    <div class="cf-mt-head"><div><strong>Timeline · multi-track view</strong><small>Split, remove, reorder source clips · drag captions to retime</small></div><span id="cfMtDuration">00:00</span></div><div class="cf-clip-actions"><button type="button" id="cfSplitVideo">Split video at playhead</button><button type="button" id="cfRemoveVideo">Remove selected clip</button><button type="button" id="cfMoveClipLeft">Move clip left</button><button type="button" id="cfMoveClipRight">Move clip right</button><button type="button" id="cfResetClips">Reset video edits</button></div><div class="cf-clip-sequence" id="cfClipSequence"></div>
+    <div class="cf-mt-head"><div><strong>Timeline · multi-track view</strong><small>Split, remove, reorder source clips · drag captions to retime</small></div><span id="cfMtDuration">00:00</span></div><div class="cf-clip-actions"><button type="button" id="cfSplitVideo">Split video at playhead</button><button type="button" id="cfRemoveVideo">Remove selected clip</button><button type="button" id="cfMoveClipLeft">Move clip left</button><button type="button" id="cfMoveClipRight">Move clip right</button><button type="button" id="cfResetClips">Reset video edits</button><button type="button" id="cfDetectSilence">Detect & remove silence</button></div><div class="cf-silence-settings"><label>Silence threshold (dB) <input id="cfSilenceDb" type="number" min="-70" max="-15" value="-42" step="1"></label><label>Minimum silence (sec) <input id="cfSilenceMin" type="number" min="0.2" max="5" value="0.6" step="0.1"></label></div><div class="cf-clip-sequence" id="cfClipSequence"></div>
     <div class="cf-mt-scroll"><div class="cf-mt-ruler" id="cfMtRuler"></div>
       <div class="cf-mt-lane"><div class="cf-mt-label">VIDEO</div><div class="cf-mt-track" id="cfMtVideo"><div class="cf-mt-video-clip">Source video · full clip</div></div></div>
       <div class="cf-mt-lane"><div class="cf-mt-label">CAPTIONS</div><div class="cf-mt-track" id="cfMtCaptions"></div></div>
@@ -151,7 +152,7 @@
     .cf-mt-caption{position:absolute;top:5px;height:30px;min-width:12px;border:1px solid #9b83e8;border-radius:5px;background:#65509a;color:white;font-size:9px;padding:0 5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:grab;touch-action:none;user-select:none}
     .cf-mt-caption.selected{outline:2px solid #d5c5ff;z-index:2}.cf-mt-caption:active{cursor:grabbing}
     .cf-mt-playhead{position:absolute;top:-1px;bottom:-1px;width:2px;background:#ff9b78;z-index:5;pointer-events:none}
-    .cf-mt-status{margin-bottom:0}.cf-clip-actions{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.cf-clip-actions button{background:#22202e;border:1px solid #4a405f;border-radius:7px;padding:7px 9px;color:#ded3ff;font-size:10px;cursor:pointer}.cf-clip-sequence{display:flex;gap:7px;overflow-x:auto;padding:4px 0 8px}.cf-seq-clip{flex:0 0 150px;min-width:120px;text-align:left;padding:9px;background:#252137;border:1px solid #5c4b7c;border-radius:8px;color:#f2eaff;cursor:pointer}.cf-seq-clip.selected{outline:2px solid #c2aaff}.cf-seq-clip small{display:block;color:#b0a6c8;font-size:9px;margin-top:5px}
+    .cf-mt-status{margin-bottom:0}.cf-clip-actions{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.cf-clip-actions button{background:#22202e;border:1px solid #4a405f;border-radius:7px;padding:7px 9px;color:#ded3ff;font-size:10px;cursor:pointer}.cf-silence-settings{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}.cf-silence-settings label{font-size:10px;color:#aaa7bb;display:flex;align-items:center;gap:7px}.cf-silence-settings input{width:72px;background:#101117;border:1px solid #363542;border-radius:6px;padding:6px;color:#f2effa}.cf-clip-sequence{display:flex;gap:7px;overflow-x:auto;padding:4px 0 8px}.cf-seq-clip{flex:0 0 150px;min-width:120px;text-align:left;padding:9px;background:#252137;border:1px solid #5c4b7c;border-radius:8px;color:#f2eaff;cursor:pointer}.cf-seq-clip.selected{outline:2px solid #c2aaff}.cf-seq-clip small{display:block;color:#b0a6c8;font-size:9px;margin-top:5px}
   `;
   document.head.appendChild(mtStyle);
   const fmtMt = (n) => { n=Math.max(0,Number(n)||0); return String(Math.floor(n/60)).padStart(2,"0")+":"+String(Math.floor(n%60)).padStart(2,"0"); };
@@ -207,6 +208,58 @@
     if(selectedClip<0||selectedClip>=clipSequence.length-1)return;[clipSequence[selectedClip+1],clipSequence[selectedClip]]=[clipSequence[selectedClip],clipSequence[selectedClip+1]];selectedClip++;renderMultiTrack();
   });
   $("#cfResetClips")?.addEventListener("click",()=>{clipSequence=[];selectedClip=0;ensureClipSequence();renderMultiTrack();$("#cfMtStatus").textContent="Source video restored as one full-length clip.";});
+
+  $("#cfDetectSilence")?.addEventListener("click",async()=>{
+    if(!video.src||!video.duration)return notify("Import a video first");
+    const button=$("#cfDetectSilence"),status=$("#cfMtStatus"),original=button.textContent;
+    if(!window.AudioContext&&!window.webkitAudioContext)return notify("This browser does not support local audio analysis");
+    button.disabled=true;button.textContent="Analyzing audio…";status.textContent="Decoding the audio locally in your browser. Large videos may need time and memory.";
+    let audioCtx;
+    try{
+      const Ctx=window.AudioContext||window.webkitAudioContext;audioCtx=new Ctx();
+      const buffer=await video.src.startsWith("blob:")?await (async()=>{const file=video.files?.[0];return file?file.arrayBuffer():null})():null;
+      // The original File object is retained by the main editor; use the local file reference when exposed.
+      const file=window.__cfSourceFile;
+      const bytes=buffer|| (file?await file.arrayBuffer():null);
+      if(!bytes)throw new Error("The local source file is unavailable for audio analysis. Re-import the video and try again.");
+      const decoded=await audioCtx.decodeAudioData(bytes.slice(0));
+      const threshold=Math.pow(10,(Math.max(-70,Math.min(-15,Number($("#cfSilenceDb").value)||-42)))/20);
+      const minSilence=Math.max(.2,Math.min(5,Number($("#cfSilenceMin").value)||.6));
+      const step=.1,total=decoded.duration,windows=Math.ceil(total/step),rms=new Float32Array(windows);
+      for(let ch=0;ch<decoded.numberOfChannels;ch++){
+        const data=decoded.getChannelData(ch);
+        for(let i=0;i<windows;i++){
+          const a=Math.floor(i*step*decoded.sampleRate),b=Math.min(data.length,Math.floor((i+1)*step*decoded.sampleRate));
+          let sum=0;for(let j=a;j<b;j++)sum+=data[j]*data[j];rms[i]+=b>a?Math.sqrt(sum/(b-a))/decoded.numberOfChannels:0;
+        }
+      }
+      const silent=[];let run=-1;
+      for(let i=0;i<=windows;i++){
+        const quiet=i<windows&&rms[i]<threshold;
+        if(quiet&&run<0)run=i;
+        if(!quiet&&run>=0){const a=run*step,b=Math.min(total,i*step);if(b-a>=minSilence)silent.push({start:a,end:b});run=-1;}
+      }
+      if(!silent.length){status.textContent="No silence longer than "+minSilence.toFixed(1)+"s found at "+$("#cfSilenceDb").value+" dB. No edits made.";return;}
+      ensureClipSequence();
+      const kept=[];
+      for(const clip of clipSequence){
+        let cursor=clip.start;
+        for(const gap of silent){
+          if(gap.end<=cursor||gap.start>=clip.end)continue;
+          const gapStart=Math.max(clip.start,gap.start),gapEnd=Math.min(clip.end,gap.end);
+          if(gapStart>cursor+.05)kept.push({start:cursor,end:gapStart});
+          cursor=Math.max(cursor,gapEnd);
+        }
+        if(clip.end>cursor+.05)kept.push({start:cursor,end:clip.end});
+      }
+      const removed=clipSequence.reduce((sum,x)=>sum+x.end-x.start,0)-kept.reduce((sum,x)=>sum+x.end-x.start,0);
+      if(!kept.length)throw new Error("The selected settings marked the entire clip as silence. Adjust the threshold and retry.");
+      clipSequence=kept;selectedClip=Math.min(selectedClip,clipSequence.length-1);renderMultiTrack();
+      status.textContent="Removed "+silent.length+" detected silence region(s) · "+removed.toFixed(1)+"s removed. Export will use the edited clip sequence.";
+    }catch(err){status.textContent="Silence detection failed: "+(err.message||"audio decode error");}
+    finally{if(audioCtx)await audioCtx.close().catch(()=>{});button.disabled=false;button.textContent=original;}
+  });
+
 
   function renderMultiTrack() {
     ensureClipSequence();
