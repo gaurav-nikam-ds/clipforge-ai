@@ -124,7 +124,7 @@ async function renderVideo(){
     rec.start(500);
     let elapsed=0;
     for(let i=0;i<segments.length;i++){
-      const seg=segments[i];await seekTo(seg.start);video.currentTime=seg.start;if(mixedAudio?.syncTo)await mixedAudio.syncTo(seg.start);if(mixedAudio?.play)await mixedAudio.play();await video.play();
+      const seg=segments[i];await seekTo(seg.start);video.currentTime=seg.start;if(mixedAudio?.syncTo)await mixedAudio.syncTo(seg.start);if(mixedAudio?.play)await mixedAudio.play(video.playbackRate);await video.play();
       await new Promise((resolve,reject)=>{
         let lastTime=performance.now();
         const tick=()=>{
