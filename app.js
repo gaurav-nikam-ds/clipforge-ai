@@ -85,7 +85,7 @@ async function renderVideo(){
   if(parts[0]>parts[1]){w=quality;h=quality*parts[1]/parts[0]}else{h=quality;w=quality*parts[0]/parts[1]}
   w=Math.max(2,Math.round(w/2)*2);h=Math.max(2,Math.round(h/2)*2);
   const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
-  const c=canvas.getContext("2d"),stream=canvas.captureStream(30);let audio=null,rec=null,chunks=[];
+  const c=canvas.getContext("2d"),stream=canvas.captureStream(30);let audio=null,mixedAudio=null,rec=null,chunks=[];
   const seekTo=async t=>{
     if(Math.abs(video.currentTime-t)<.025)return;
     await new Promise((resolve,reject)=>{
@@ -101,8 +101,8 @@ async function renderVideo(){
     if($("#includeCaptions").checked){const cap=S.captions.find(x=>video.currentTime>=x.start&&video.currentTime<=x.end);if(cap)paintCaption(c,w,h,cap.text,S.style,S.position,S.size*w/600,S.color)}
   };
   try{
-    if(video.captureStream)audio=video.captureStream();else if(video.mozCaptureStream)audio=video.mozCaptureStream();
-    if(audio)audio.getAudioTracks().forEach(t=>stream.addTrack(t));
+    if(typeof window.__cfCreateAudioMix==="function"){mixedAudio=await window.__cfCreateAudioMix();if(mixedAudio&&mixedAudio.stream)mixedAudio.stream.getAudioTracks().forEach(t=>stream.addTrack(t));}
+    else{if(video.captureStream)audio=video.captureStream();else if(video.mozCaptureStream)audio=video.mozCaptureStream();if(audio)audio.getAudioTracks().forEach(t=>stream.addTrack(t));}
     let mime="video/webm;codecs=vp9,opus";if(!MediaRecorder.isTypeSupported(mime))mime="video/webm;codecs=vp8,opus";if(!MediaRecorder.isTypeSupported(mime))mime="video/webm";
     rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:quality>=1080?6000000:3000000});
     rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
@@ -136,7 +136,7 @@ async function renderVideo(){
     message.textContent="Export complete · "+(blob.size/1048576).toFixed(1)+" MB · WebM · "+time(exportDuration)+" edited";
     toast("Edited WebM export downloaded");
   }catch(err){message.textContent="Export failed: "+(err.message||"browser recording error");toast("Render failed. Try Chrome or Edge.")}
-  finally{S.exporting=false;button.disabled=false;if(audio)audio.getTracks().forEach(t=>t.stop());stream.getTracks().forEach(t=>t.stop());video.pause();video.playbackRate=1;video.currentTime=trimStart;drawPreview();updateAll()}
+  finally{S.exporting=false;button.disabled=false;if(audio)audio.getTracks().forEach(t=>t.stop());if(mixedAudio){mixedAudio.stream.getTracks().forEach(t=>t.stop());await mixedAudio.cleanup?.()}stream.getTracks().forEach(t=>t.stop());video.pause();video.playbackRate=1;video.currentTime=trimStart;drawPreview();updateAll()}
 }
 $("#renderVideo").addEventListener("click",renderVideo);$("#renderFromEditor").addEventListener("click",()=>{go("export");renderVideo()});
 $("#captionLanguage").addEventListener("change",()=>toast("Language preference updated; no automatic translation is connected."));
