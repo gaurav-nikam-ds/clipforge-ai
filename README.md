@@ -15,17 +15,17 @@ The new browser frontend is the intended UI direction. It is a client-side found
 - Import and export SRT subtitle files
 - Six original caption-style presets, colour/size/position controls and live caption preview
 - Aspect-ratio canvas selection for browser rendering (9:16, 16:9, 1:1 and 4:5)
-- Browser-based WebM recording with caption burn-in where MediaRecorder and video stream capture are supported
+- Browser-based WebM recording with caption burn-in, source-audio capture, optional user-supplied music mixing, trim range and ordered clip-sequence rendering where browser APIs are supported
 - Local project snapshots in browser localStorage (caption text/settings only, not the video file)
-- Edit brief planner and sound-cue planning list
+- Non-destructive source clip split/remove/reorder controls; the export renderer consumes the ordered source ranges\n- Drag-to-retime caption blocks on the timeline\n- Local silence analysis using Web Audio, with detected quiet regions removed from the clip sequence\n- Optional local Whisper transcription through Transformers.js; the first run downloads a large model and may be slow or fail on low-memory devices\n- User-supplied audio/music track with volume control mixed into browser export\n- Edit brief planner and sound-cue planning list
 
 ## Known limitations — not implemented as production features
 - Automatic transcription of uploaded files is **not connected** in the new browser frontend.
 - AI translation, Hinglish normalization and word-level timestamps are not implemented in that frontend.
 - AI edit planner creates a written draft; it does not automatically make cuts, zooms or B-roll.
 - The sound page is a cue-planning list; no licensed audio files are bundled.
-- Silence detection/removal, subject cut-outs, camera tracking, AI B-roll generation, clip split/reorder, keyframes, animated karaoke word tracking and a 100+ template library are not implemented in the browser frontend.
-- Browser export is WebM, not MP4. Browser/device support and performance vary; long videos can use substantial memory. The selected aspect ratio is applied to the render canvas using a cover crop.
+- Subject cut-outs, camera tracking, AI B-roll generation, keyframes, animated karaoke word tracking, transition/effect libraries and a 100+ template library are not implemented in the browser frontend. Clip splitting/reordering and silence removal operate on source-time ranges; verify results with your own media before relying on them.
+- Browser export is WebM, not MP4. Browser/device support and performance vary; long videos, local AI inference and full audio decoding can use substantial memory. Background audio is mixed into export when supported. The selected aspect ratio is applied to the render canvas using a cover crop.
 - The browser snapshot saves project metadata, not media bytes. Re-import the video before rendering after a page reload.
 - No accounts, cloud project storage, billing, team workspaces, background job queue or editor integrations are provided.
 
@@ -54,7 +54,7 @@ The repository root contains Python and Streamlit files for the old deployment, 
 The first faster-whisper transcription downloads model files. The `tiny` model is selected by default to reduce CPU/RAM usage.
 
 ## Production requirements still needed
-Before turning this into a public AI editing SaaS, connect a transcription/render backend, add secure authentication, upload limits, private media storage with retention rules, a background render queue, real progress reporting, automated tests and operational monitoring. AI/GPU processing, storage and bandwidth have ongoing costs, so unlimited public usage cannot be promised without infrastructure and a usage policy.
+Before turning this into a public AI editing SaaS, add automated browser end-to-end tests, verify cross-browser rendering and audio sync, add robust failure recovery, secure authentication, private media storage with retention rules, a background render queue, production observability and operational monitoring. AI/GPU processing, storage and bandwidth have ongoing costs, so unlimited public usage cannot be promised without infrastructure and a usage policy.
 
 ## Privacy
 The new browser frontend does not upload media to a ClipForge backend. Browser-local project snapshots are not encrypted or permanent. The Streamlit prototype writes temporary files on its hosting machine; avoid uploading confidential footage to public deployments.
