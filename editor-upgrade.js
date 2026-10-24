@@ -199,6 +199,7 @@
     [videoTrack,capTrack].forEach(track=>{const line=document.createElement("div");line.className="cf-mt-playhead";line.style.left=pct+"%";track.appendChild(line);});
     $("#cfMtStatus").textContent=duration?("Playhead "+video.currentTime.toFixed(2)+"s · "+items.length+" caption clip(s). Drag blocks horizontally to retime them. Video source is one clip in this build."): "Import a video to create a timeline.";
   }
+  $("#cfMtVideo")?.addEventListener("click",e=>{const duration=mtDuration();if(!duration)return;const rect=e.currentTarget.getBoundingClientRect();video.currentTime=Math.max(0,Math.min(duration,(e.clientX-rect.left)/rect.width*duration));});
   video.addEventListener("loadedmetadata",renderMultiTrack);
   video.addEventListener("timeupdate",()=>{const duration=mtDuration();if(!duration)return;const pct=Math.min(100,video.currentTime/duration*100);document.querySelectorAll(".cf-mt-playhead").forEach(line=>line.style.left=pct+"%");$("#cfMtStatus").textContent="Playhead "+video.currentTime.toFixed(2)+"s · drag caption blocks to retime.";});
   const mtObserver=new MutationObserver(()=>renderMultiTrack());
