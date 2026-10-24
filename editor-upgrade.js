@@ -114,7 +114,7 @@
           audioVideo.addEventListener("seeked",done,{once:true});audioVideo.addEventListener("error",fail,{once:true});audioVideo.currentTime=t;
         });
       },
-      play:async()=>{await audioVideo.play();if(mixMusicElement&&mixMusicElement.paused)await mixMusicElement.play()},
+      play:async rate=>{audioVideo.playbackRate=Number(rate)||1;await audioVideo.play();if(mixMusicElement&&mixMusicElement.paused)await mixMusicElement.play()},
       pause:()=>{audioVideo.pause()},
       cleanup:async()=>{try{audioVideo.pause();audioVideo.remove();mixMusicElement?.pause();mixMusicElement?.remove()}catch{}try{await ac.close()}catch{}}
     };
