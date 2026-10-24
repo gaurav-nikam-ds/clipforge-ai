@@ -22,7 +22,7 @@
       <button type="button" id="cfSplit">Split caption at playhead</button>
       <button type="button" id="cfDuplicate">Duplicate caption</button>
       <button type="button" id="cfMerge">Merge with previous</button>
-      <button type="button" id="cfJump">Go to time</button><button type="button" id="cfTranscribe">Transcribe locally (AI)</button><label class="cf-music-label">Music/audio track <input id="cfMusicFile" type="file" accept="audio/*"></label><label class="cf-music-label">Music volume <input id="cfMusicVolume" type="range" min="0" max="100" value="20"><span id="cfMusicVolumeValue">20%</span></label>
+      <button type="button" id="cfJump">Go to time</button><button type="button" id="cfTranscribe">Transcribe locally (AI)</button><label class="cf-music-label">Music/audio track <input id="cfMusicFile" type="file" accept="audio/*"></label><label class="cf-music-label">Music volume <input id="cfMusicVolume" type="range" min="0" max="100" value="20"><span id="cfMusicVolumeValue">20%</span></label><div class="cf-filter-controls"><strong>Visual adjustments</strong><label>Brightness <input id="cfBrightness" type="range" min="50" max="150" value="100"><span id="cfBrightnessValue">100%</span></label><label>Contrast <input id="cfContrast" type="range" min="50" max="150" value="100"><span id="cfContrastValue">100%</span></label><label>Saturation <input id="cfSaturation" type="range" min="0" max="200" value="100"><span id="cfSaturationValue">100%</span></label><button type="button" id="cfResetFilters">Reset adjustments</button></div>
     </div>
     <p id="cfTranscribeStatus" class="cf-tools-note">Local AI transcription downloads an open-source model to your browser on first use. It can be slow and needs sufficient RAM.</p><p class="cf-tools-note">Caption split/merge edits are applied to the current caption track. Speed changes the preview and is used during browser recording export. This is not a full multi-clip video timeline yet.</p>`;
   const mediaPanel = $(".media-panel");
@@ -38,7 +38,7 @@
     .cf-tools-grid select,.cf-tools-grid input{width:100%;min-width:0;background:#101117;border:1px solid #363542;border-radius:7px;padding:9px;color:#f2effa}
     .cf-tools-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
     .cf-tools-actions button{background:#262136;border:1px solid #4b3d66;border-radius:7px;padding:8px 10px;color:#d8c9ff;font-size:10px;cursor:pointer}
-    .cf-tools-actions button:hover{border-color:#ac91ff}.cf-music-label{font-size:10px;color:#aaa7bb;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0}.cf-music-label input[type=file]{max-width:220px;font-size:10px;color:#c8c5d7}.cf-music-label input[type=range]{width:110px}.cf-tools-note{line-height:1.6;margin:10px 0 0}
+    .cf-tools-actions button:hover{border-color:#ac91ff}.cf-music-label{font-size:10px;color:#aaa7bb;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0}.cf-music-label input[type=file]{max-width:220px;font-size:10px;color:#c8c5d7}.cf-music-label input[type=range]{width:110px}.cf-filter-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 0}.cf-filter-controls strong{grid-column:1/-1;font-size:11px}.cf-filter-controls label{display:grid;grid-template-columns:1fr auto;gap:6px;font-size:10px;color:#aaa7bb}.cf-filter-controls input{grid-column:1/-1;width:100%}.cf-filter-controls button{background:#22202e;border:1px solid #4a405f;border-radius:7px;padding:7px;color:#ded3ff;font-size:10px}.cf-tools-note{line-height:1.6;margin:10px 0 0}
   `;
   document.head.appendChild(style);
 
@@ -64,6 +64,19 @@
   video.addEventListener("timeupdate", () => { $("#cfSeek").value = (video.currentTime || 0).toFixed(2); });
 
 
+
+
+  const filterState={brightness:100,contrast:100,saturation:100};
+  const applyFilters=()=>{
+    window.__cfVideoFilters={...filterState};
+    video.style.filter="brightness("+filterState.brightness+"%) contrast("+filterState.contrast+"%) saturate("+filterState.saturation+"%)";
+    ["Brightness","Contrast","Saturation"].forEach(name=>{const key=name.toLowerCase();const el=$("#cf"+name+"Value");if(el)el.textContent=filterState[key]+"%";});
+  };
+  [["Brightness","brightness"],["Contrast","contrast"],["Saturation","saturation"]].forEach(([name,key])=>{
+    $("#cf"+name)?.addEventListener("input",e=>{filterState[key]=Number(e.target.value)||100;applyFilters();});
+  });
+  $("#cfResetFilters")?.addEventListener("click",()=>{Object.keys(filterState).forEach(key=>{filterState[key]=100;const el=$("#cf"+key[0].toUpperCase()+key.slice(1));if(el)el.value="100";});applyFilters();notify("Visual adjustments reset");});
+  applyFilters();
 
   let musicUrl=null,musicElement=null,musicFile=null,musicVolume=.2;
   const musicInput=$("#cfMusicFile"),musicVolumeInput=$("#cfMusicVolume");
