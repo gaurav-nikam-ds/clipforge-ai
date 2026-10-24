@@ -113,7 +113,7 @@ async function renderVideo(){
     rec.start(500);
     let elapsed=0;
     for(let i=0;i<segments.length;i++){
-      const seg=segments[i];await seekTo(seg.start);video.currentTime=seg.start;await video.play();
+      const seg=segments[i];await seekTo(seg.start);video.currentTime=seg.start;if(mixedAudio?.syncTo)await mixedAudio.syncTo(seg.start);if(mixedAudio?.play)await mixedAudio.play();await video.play();
       await new Promise((resolve,reject)=>{
         let lastTime=performance.now();
         const tick=()=>{
@@ -123,7 +123,7 @@ async function renderVideo(){
           const pct=Math.min(99,Math.round((elapsed+played)/exportDuration*100));
           $("#progressBar").style.width=pct+"%";$("#progressPercent").textContent=pct+"%";
           $("#progressLabel").textContent="Rendering clip "+(i+1)+"/"+segments.length+" · "+time(video.currentTime);
-          if(video.currentTime>=seg.end-.025||video.ended){elapsed+=seg.end-seg.start;video.pause();resolve();return}
+          if(video.currentTime>=seg.end-.025||video.ended){elapsed+=seg.end-seg.start;video.pause();mixedAudio?.pause?.();resolve();return}
           if(video.error){reject(new Error("Video decode failed"));return}
           lastTime=performance.now();requestAnimationFrame(tick);
         };requestAnimationFrame(tick);
