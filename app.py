@@ -101,7 +101,7 @@ with st.sidebar:
     st.markdown('<div class="cf-eyebrow">CURRENT PROJECT</div>',unsafe_allow_html=True)
     st.session_state.project_name=st.text_input("Project name",value=st.session_state.project_name,label_visibility="collapsed",placeholder="Untitled project")
     if st.session_state.media_path:
-        st.success("Video loaded",icon="✓")
+        st.success("Video loaded")
         st.caption(f"{st.session_state.duration:.1f}s · {len(st.session_state.segments)} caption segments")
     else:
         st.caption("No video in this project yet.")
